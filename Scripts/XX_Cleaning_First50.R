@@ -38,101 +38,52 @@ library(DCchoice)
 
 Data_Covariates <-
   here("Data/Pilot1/", "D2_Pilot1_Covariates.xlsx") %>% 
-  readxl::read_xlsx(col_types = "text", sheet = "Data") %>% 
+  readxl::read_xlsx(sheet = "Data") %>% 
   data.frame()
 
 
 Data_Timers <-
   here("Data/Pilot1/", "DRUID_pilot_1_timestamps_2024-09-10.xlsx") %>% 
-  readxl::read_xlsx(col_types = "text", sheet = "Data") %>% 
+  readxl::read_xlsx(sheet = "Data") %>% 
   data.frame()
 
 
 Data_CE <-
   here("Data/Pilot1/", "DRUID_pilot_1_DCE_d2_test2_2024-09-10.xlsx") %>% 
-  readxl::read_xlsx(col_types = "text", sheet = "Data") %>% 
+  readxl::read_xlsx(sheet = "Data") %>% 
   data.frame()
 
 
 
-
 # **********************************************************************************
-#### Section 1: Identify prob test failures ####
-# **********************************************************************************
-
-
-## Recategorise so that pass  = 1
-USData_Client_Xlsx$ProbabilityTest_Numeric <- ifelse(
-  USData_Client_Xlsx$T1 == 
-    "The risk of getting a cold is higher in group A", 
-  0 , 
-  1) 
-
-USData_Client_Xlsx$ProbabilityTest_Categorical <- ifelse(
-  USData_Client_Xlsx$T1 == 
-    "The risk of getting a cold is higher in group A", 
-  "Fail", 
-  "Pass") 
-
-
-
-# **********************************************************************************
-#### Section 2: Identify speeders ####
-## First survey speeders then valuation section
+#### Section 2A: Identify survey speed/slow ####
+### Recode as fail (0) or pass (10)
 # **********************************************************************************
 
 
-## First append the country from the main data to the timer data
-USData_Timers$Country <- USData_Client_Xlsx$Country
+Data_Covariates$SurveyCompletionTime <- Data_Covariates$DURATION %>% as.numeric()
 
 
-USData_Client_Xlsx <- USData_Client_Xlsx %>% 
-  dplyr::filter(Country == "United States")
-
-
-USData_Timers <- USData_Timers %>% 
-  dplyr::filter(Country == "United States")
-
-# **********************************************************************************
-#### SURVEY SPEEDERS
-
-## Calculate each persons time
-## by getting each rows sum of time in seconds
-USData_Timers$Speeders_Survey_CompletionTime <-
-  USData_Timers[2:92] %>% 
-  rowSums(na.rm = TRUE) 
-
-
-## Now calculate and append to data the 
-## country specific threshold using 48% of median (for speeding)
-## of 148% for too slow
-USData_Timers <- 
-  USData_Timers %>% 
-  group_by(Country) %>% 
-  mutate("Speeders_Survey_CountryThreshold" = 
-           median(Speeders_Survey_CompletionTime) %>% multiply_by(0.48),
-         "Slowers_Survey_CountryThreshold" = 
-           median(Speeders_Survey_CompletionTime) %>% multiply_by(1.48)
+Data_Covariates <- 
+  Data_Covariates %>% 
+  mutate("Speeders_Survey_Threshold" = 
+           median(SurveyCompletionTime) %>% multiply_by(0.48),
+         "Slowers_Survey_Threshold" = 
+           median(SurveyCompletionTime) %>% multiply_by(1.48),
+         
+         
+         "Speeders_Survey_TestDummy" = ifelse(
+           SurveyCompletionTime <= Speeders_Survey_Threshold, 0, 1),
+         
+         "Slowers_Survey_TestDummy" = ifelse(
+           SurveyCompletionTime >= Slowers_Survey_Threshold, 0, 1)
   )
 
 
-## Recode as fail (0) or pass (10)
-USData_Timers$Speeders_Survey_TestDummy <- ifelse(
-  USData_Timers$Speeders_Survey_CompletionTime <=
-    USData_Timers$Speeders_Survey_CountryThreshold, 0, 1)
-
-
-## Test people going too slow
-USData_Timers$Slowers_Survey_TestDummy <- ifelse(
-  USData_Timers$Speeders_Survey_CompletionTime >=
-    USData_Timers$Slowers_Survey_CountryThreshold, 0, 1)
-
-
 ## Output survey speeder data
-USData_Timers %>%
-  group_by(Country) %>%
+Data_Covariates %>%
   summarise(
-    Threshold = first(Speeders_Survey_CountryThreshold),
+    Threshold = first(Speeders_Survey_Threshold),
     
     N_Fail = paste0(
       sum(Speeders_Survey_TestDummy == 0),
@@ -150,40 +101,35 @@ USData_Timers %>%
 
 
 # **********************************************************************************
-#### VALUATION SPEEDERS
+#### Section 2B: Identify valuation speed/slow ####
+# ## Recode as fail (0) or pass (10)
+# **********************************************************************************
 
 
-## Valuation section
-USData_Timers$Speeders_Valuation_CompletionTime <-
-  USData_Timers[c("Q1", "Q2", "Q3", "Q4", "Q5", "Q6a", "Q6b", "Q6c", "Q7")] %>%
-  rowSums(na.rm = TRUE) 
+Data_Covariates$Valuation_Start <- Data_Timers$PAGE_DISPLAY_13 %>% as.numeric()
+Data_Covariates$Valuation_Finish <- Data_Timers$PAGE_SUBMIT_33 %>% as.numeric()
+Data_Covariates$Valuation_CompletionTime <-  Data_Covariates$Valuation_Finish - Data_Covariates$Valuation_Start
+
+Data_Covariates <- 
+  Data_Covariates %>% 
+  mutate("Speeders_Valuation_Threshold" = 
+           median(Valuation_CompletionTime) %>% multiply_by(0.48),
+         "Slowers_Valuation_Threshold" = 
+           median(Valuation_CompletionTime) %>% multiply_by(1.48),
+         
+         
+         "Speeders_Valuation_TestDummy" = ifelse(
+           Valuation_CompletionTime <= Speeders_Valuation_Threshold, 0, 1),
+         
+         "Slowers_Valuation_TestDummy" = ifelse(
+           Valuation_CompletionTime >= Slowers_Valuation_Threshold, 0, 1)
+  )
 
 
-## Categorise valuation section threshold
-USData_Timers <- USData_Timers %>% 
-  group_by(Country) %>% 
-  mutate("Speeders_Valuation_CountryThreshold" = 
-           median(Speeders_Valuation_CompletionTime) %>% multiply_by(0.48),
-         "Slowers_Valuation_CountryThreshold" = 
-           median(Speeders_Valuation_CompletionTime) %>% multiply_by(1.48))
-
-
-## Recode as fail (0) or pass (10)
-USData_Timers$Speeders_Valuation_TestDummy <- ifelse(
-  USData_Timers$Speeders_Valuation_CompletionTime <=
-    USData_Timers$Speeders_Valuation_CountryThreshold, 0, 1)
-
-
-USData_Timers$Slowers_Valuation_TestDummy <- ifelse(
-  USData_Timers$Speeders_Valuation_CompletionTime >=
-    USData_Timers$Slowers_Valuation_CountryThreshold, 0, 1)
-
-
-
-USData_Timers %>%
-  group_by(Country) %>%
+## Output survey speeder data
+Data_Covariates %>%
   summarise(
-    Threshold = first(Speeders_Valuation_CountryThreshold),
+    Threshold = first(Speeders_Valuation_Threshold),
     
     N_Fail = paste0(
       sum(Speeders_Valuation_TestDummy == 0),
@@ -195,720 +141,577 @@ USData_Timers %>%
       sum(Speeders_Valuation_TestDummy == 1),
       " (", mean(Speeders_Valuation_TestDummy == 1) %>% 
         round(2) %>% 
-        multiply_by(100), "%)")
-  ) %>% 
+        multiply_by(100), "%)")) %>% 
   write.csv(quote = FALSE)
 
 
 
-USData_Timers %>% 
-  fwrite(sep = ",", 
-         here("Data/22-029424-01_SWACHE_Hypertension_Main_EL_PT_FI_US_client",
-              "USData_Main_Timers_Cleaned.csv"))
 
-# 
-# ## Add timer data to main dataset
-# USData_Client_Xlsx <- cbind(
-#   USData_Client_Xlsx,
-#   USData_Timers[, 94:103]
-# )
-
-
-# USData_Timers$ProbabilityTest_Numeric <- USData_Client_Xlsx$ProbabilityTest_Numeric
-# USData_Timers$DBDC <- USData_Client_Xlsx$DBDC
-# 
-# 
-# 
-# 
-# summary_function <- function(data, column) {
-#   data %>%
-#     group_by(Country) %>%
-#     summarise(across({{column}}, 
-#                      list(Min = min, 
-#                           `1st Qu.` = ~quantile(.x, 0.25, na.rm = TRUE), 
-#                           Median = ~round(median(.x, na.rm = TRUE), 3), 
-#                           Mean = ~round(mean(.x, na.rm = TRUE), 3), 
-#                           `3rd Qu.` = ~quantile(.x, 0.75, na.rm = TRUE), 
-#                           Max = max,
-#                           SD = ~round(sd(.x, na.rm = TRUE), 3)), # Correct rounding within the list
-#                      .names = "{.fn}"), 
-#               .groups = "drop")
-# }
-# 
-# rbind(
-#   "Survey time",
-#   summary_function(USData_Timers, Speeders_Survey_CompletionTime),
-#   "Valuation time",
-#   summary_function(USData_Timers, Speeders_Valuation_CompletionTime)
-# ) %>% write.csv(quote = FALSE)
+# **********************************************************************************
+#### Section 3A: Insect qual data Q9  ####
+# **********************************************************************************
 
 
 
+QualData_Q9InsectWords <- cbind(
+  Data_Covariates$Q9Insect_Word1,
+  Data_Covariates$Q9Insect_Word2,
+  Data_Covariates$Q9Insect_Word3
+)
+
+# Convert all entries to lowercase
+QualData_Q9InsectWords_clean <- tolower(QualData_Q9InsectWords)
+
+# Correct common misspellings or variations using gsub
+QualData_Q9InsectWords_clean <- gsub("bettle", "beetle", QualData_Q9InsectWords_clean)
+QualData_Q9InsectWords_clean <- gsub("moskit", "mosquito", QualData_Q9InsectWords_clean)
+QualData_Q9InsectWords_clean <- gsub("gly", "fly", QualData_Q9InsectWords_clean)
+QualData_Q9InsectWords_clean <- gsub("annpoying", "annoying", QualData_Q9InsectWords_clean)
+QualData_Q9InsectWords_clean <- gsub("ants", "ant", QualData_Q9InsectWords_clean)
+QualData_Q9InsectWords_clean <- gsub("bees", "bee", QualData_Q9InsectWords_clean)
+QualData_Q9InsectWords_clean <- gsub("bugs", "bug", QualData_Q9InsectWords_clean)
+QualData_Q9InsectWords_clean <- gsub("butterflies", "butterfly", QualData_Q9InsectWords_clean)
+QualData_Q9InsectWords_clean <- gsub("spiders", "spider", QualData_Q9InsectWords_clean)
+QualData_Q9InsectWords_clean <- gsub("wasps", "wasp", QualData_Q9InsectWords_clean)
 
 
 
+# Create a frequency table of the cleaned data
+QualData_Q9InsectWords_clean_Freq <- table(QualData_Q9InsectWords_clean)
 
+# Sort the table by frequency (descending order)
+QualData_Q9InsectWords_clean_Freq_Sorted <- sort(QualData_Q9InsectWords_clean_Freq, 
+                                                 decreasing = TRUE)
 
+# Print the table
+QualData_Q9InsectWords_clean_Freq_Sorted %>% write.csv(quote = FALSE)
 
-
-# ## Subset by prob test
-# summary_function <- function(data, column) {
-#   data %>%
-#     filter(ProbabilityTest_Numeric == 1) %>% 
-#     group_by(Country) %>%
-#     summarise(across({{column}}, 
-#                      list(Min = min, 
-#                           `1st Qu.` = ~quantile(.x, 0.25, na.rm = TRUE), 
-#                           Median = ~round(median(.x, na.rm = TRUE), 3), 
-#                           Mean = ~round(mean(.x, na.rm = TRUE), 3), 
-#                           `3rd Qu.` = ~quantile(.x, 0.75, na.rm = TRUE), 
-#                           Max = max,
-#                           SD = ~round(sd(.x, na.rm = TRUE), 3)), # Correct rounding within the list
-#                      .names = "{.fn}"), 
-#               .groups = "drop")
-# }
-# 
-# rbind(
-#   "ProbTest0",
-#   summary_function(USData_Timers[USData_Timers$ProbabilityTest_Numeric == 0,], Speeders_Survey_CompletionTime),
-#   summary_function(USData_Timers[USData_Timers$ProbabilityTest_Numeric == 0,], Speeders_Valuation_CompletionTime),
-#   "ProbTest1",
-#   summary_function(USData_Timers[USData_Timers$ProbabilityTest_Numeric == 1,], Speeders_Survey_CompletionTime),
-#   summary_function(USData_Timers[USData_Timers$ProbabilityTest_Numeric == 1,], Speeders_Valuation_CompletionTime)
-# ) %>% write.csv(quote = FALSE)
-# 
-# 
-# 
-# Test <- c("YY",
-#           "NY",
-#           "NN",
-#           "YN")
-
-# 
-# rbind(
-#   "YY",
-#   summary_function(USData_Timers[USData_Timers$DBDC == "YY",], Speeders_Survey_CompletionTime),
-#   summary_function(USData_Timers[USData_Timers$DBDC == "YY",], Speeders_Valuation_CompletionTime),
-#   "YN",
-#   summary_function(USData_Timers[USData_Timers$DBDC == "YN",], Speeders_Survey_CompletionTime),
-#   summary_function(USData_Timers[USData_Timers$DBDC == "YN",], Speeders_Valuation_CompletionTime),
-#   "NY",
-#   summary_function(USData_Timers[USData_Timers$DBDC == "NY",], Speeders_Survey_CompletionTime),
-#   summary_function(USData_Timers[USData_Timers$DBDC == "NY",], Speeders_Valuation_CompletionTime),
-#   "NN",
-#   summary_function(USData_Timers[USData_Timers$DBDC == "NN",], Speeders_Survey_CompletionTime),
-#   summary_function(USData_Timers[USData_Timers$DBDC == "NN",], Speeders_Valuation_CompletionTime)
-# ) %>% write.csv(quote = FALSE)
-# 
 
 
 
 
 # **********************************************************************************
-#### Section 2B: Count and proportion by two groups  ####
+#### Section 3A: Insect qual data Q9  ####
 # **********************************************************************************
 
-USData_Client_Xlsx %>%
-  count(Country, T1) %>%
-  group_by(Country) %>%
+
+QualData_Q10InsectWords <- cbind(
+  Data_Covariates$Q10Insect_Species1,
+  Data_Covariates$Q10Insect_Species2,
+  Data_Covariates$Q10Insect_Species3
+)
+
+QualData_Q10InsectWords
+
+
+
+
+# Convert all entries to lowercase
+QualData_Q10InsectWords_clean <- tolower(QualData_Q10InsectWords)
+
+# Correct common misspellings or variations using gsub
+QualData_Q10InsectWords_clean <- gsub("ants", "ant", QualData_Q10InsectWords_clean)
+QualData_Q10InsectWords_clean <- gsub("aunts", "ant", QualData_Q10InsectWords_clean)
+QualData_Q10InsectWords_clean <- gsub("bees", "bee", QualData_Q10InsectWords_clean)
+QualData_Q10InsectWords_clean <- gsub("butterflie", "butterfly", QualData_Q10InsectWords_clean)
+QualData_Q10InsectWords_clean <- gsub("ear wig", "earwig", QualData_Q10InsectWords_clean)
+QualData_Q10InsectWords_clean <- gsub("lady bird", "ladybird", QualData_Q10InsectWords_clean)
+QualData_Q10InsectWords_clean <- gsub("lady bug", "ladybird", QualData_Q10InsectWords_clean)
+QualData_Q10InsectWords_clean <- gsub("mosca", "mosquito", QualData_Q10InsectWords_clean)
+QualData_Q10InsectWords_clean <- gsub("moskit", "mosquito", QualData_Q10InsectWords_clean)
+QualData_Q10InsectWords_clean <- gsub("wasps", "wasp", QualData_Q10InsectWords_clean)
+QualData_Q10InsectWords_clean <- gsub("worms", "worm", QualData_Q10InsectWords_clean)
+
+
+
+# Create a frequency table of the cleaned data
+QualData_Q10InsectWords_clean_Freq <- table(QualData_Q10InsectWords_clean)
+
+# Sort the table by frequency (descending order)
+QualData_Q10InsectWords_clean_Freq_Sorted <- sort(QualData_Q10InsectWords_clean_Freq, 
+                                                 decreasing = TRUE)
+
+# Print the table
+QualData_Q10InsectWords_clean_Freq_Sorted %>% write.csv(quote = FALSE)
+
+
+# **********************************************************************************
+#### Question 11 ####
+# **********************************************************************************
+
+
+
+Q11_A <- Data_Covariates %>%
+  count(Q11OpinionOnInsectPopulations_1) %>%
   mutate(
+    Question = "I believe that insect populations have declined in Great Britain",
     Total = sum(n),
-    Data = sprintf("%d (%s)", n, percent(n / Total, accuracy = 0.1))
+    Percentage = n / Total,
+    Result = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))
   ) %>%
-  select(-n, -Total) %>%
-  pivot_wider(names_from = T1, values_from = Data) %>%
-  ungroup() %>% 
+  select(-n, -Total, -Percentage) 
+
+
+Q11_B <- Data_Covariates %>%
+  count(Q11OpinionOnInsectPopulations_2) %>%
+  mutate(
+    Question = "I believe that insect populations will decline in the future in Great Britain",
+    Total = sum(n),
+    Percentage = n / Total,
+    Result = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))
+  ) %>%
+  select(-n, -Total, -Percentage)
+
+
+bind_rows(
+  Q11_A,
+  Q11_B) %>% 
   write.csv(quote = FALSE)
 
 
 
 
 # **********************************************************************************
-#### Section 3: DBDC Matrix ####
+#### Question 12 ####
 # **********************************************************************************
 
 
-# Recoding -------------------------------------------------------------
-USData_Client_Xlsx$Question1 <- 
-  ifelse(
-    USData_Client_Xlsx$Q1 == "Current risk", 
-    0, ## Vote no
-    1) ## Vote yes
 
-USData_Client_Xlsx$Q2_Missing <- ifelse(USData_Client_Xlsx$Q2 %>% is.na(), 
-                                        NA, ## is.na = true so code as na
-                                        USData_Client_Xlsx$Q2) ## put answer if not na
-
-USData_Client_Xlsx$Q3_Missing <- ifelse(USData_Client_Xlsx$Q3 %>% is.na(), 
-                                        NA, 
-                                        USData_Client_Xlsx$Q3)
-
-
-USData_Client_Xlsx$FollowUp <- coalesce(USData_Client_Xlsx$Q2_Missing, USData_Client_Xlsx$Q3_Missing)
-USData_Client_Xlsx$FollowUp_Numeric <- ifelse(USData_Client_Xlsx$FollowUp == "Current risk", 
-                                              0, 
-                                              1)
-
-
-
-## Remove currency signs and convert to numeric
-USData_Client_Xlsx$Bid1_Numeric <-
-  USData_Client_Xlsx$BID1 %>% 
-  gsub(x = ., 
-       pattern = "\\$ ", 
-       replacement = "") %>% 
-  gsub(x = ., 
-       pattern = ",", 
-       replacement = "") %>% 
-  as.numeric()
+Data_Covariates <- Data_Covariates %>%
+  mutate(
+    Q12InsectIDQuiz_DV_1_Dummy = ifelse(str_detect(Q12InsectIDQuiz_DV_1, ": correct"), 1, 0),
+    Q12InsectIDQuiz_DV_2_Dummy = ifelse(str_detect(Q12InsectIDQuiz_DV_2, ": correct"), 1, 0),
+    Q12InsectIDQuiz_DV_3_Dummy = ifelse(str_detect(Q12InsectIDQuiz_DV_3, ": correct"), 1, 0),
+    Q12InsectIDQuiz_DV_4_Dummy = ifelse(str_detect(Q12InsectIDQuiz_DV_4, ": correct"), 1, 0),
+    Q12InsectIDQuiz_DV_5_Dummy = ifelse(str_detect(Q12InsectIDQuiz_DV_5, ": correct"), 1, 0),
+    Q12InsectIDQuiz_DV_6_Dummy = ifelse(str_detect(Q12InsectIDQuiz_DV_6, ": correct"), 1, 0),
+    Q12InsectIDQuiz_Score = 
+      (Q12InsectIDQuiz_DV_1_Dummy +
+      Q12InsectIDQuiz_DV_2_Dummy +
+      Q12InsectIDQuiz_DV_3_Dummy +
+      Q12InsectIDQuiz_DV_4_Dummy +
+      Q12InsectIDQuiz_DV_5_Dummy +
+      Q12InsectIDQuiz_DV_6_Dummy),
+    Q12InsectIDQuiz_DV_6_ScoreScaled = 
+      (100/6*Q12InsectIDQuiz_Score) %>% 
+      round(2)
+    )
 
 
-## DBDC second bound bid level
-USData_Client_Xlsx$FollowUp_Bid <-
-  ifelse(USData_Client_Xlsx$Q2_Missing %>% is.na(), 
-         USData_Client_Xlsx$BID3, 
-         USData_Client_Xlsx$BID2) %>% 
-  gsub(pattern = "\\$ ", replacement = "") %>% 
-  gsub(pattern = ",", replacement = "") %>% 
-  as.numeric()
-
-
-## Originally character for reasons
-USData_Client_Xlsx$BASE_Numeric <- USData_Client_Xlsx$BASE %>% as.numeric()
-USData_Client_Xlsx$RED_Numeric <- USData_Client_Xlsx$RED %>% as.numeric()
-
-
-USData_Client_Xlsx$DBDC <- ifelse(
-  (USData_Client_Xlsx$Question1 == 0) & (USData_Client_Xlsx$FollowUp_Numeric == 0), 
-  "NN", 
-  ifelse(
-    (USData_Client_Xlsx$Question1 == 0) & (USData_Client_Xlsx$FollowUp_Numeric == 1), 
-    "NY",
-    ifelse(
-      (USData_Client_Xlsx$Question1 == 1) & (USData_Client_Xlsx$FollowUp_Numeric == 0), 
-      "YN",
-      ifelse(
-        (USData_Client_Xlsx$Question1 == 1) & (USData_Client_Xlsx$FollowUp_Numeric == 1), 
-        "YY", 
-        1)))) 
-
-
-# Create summaries  -------------------------------------------------------------
-
-
-## DBDC matrix by country
-USData_Client_Xlsx %>% select("Country", "DBDC") %>% table(.)
-
-## Output matrix by country
-USData_Client_Xlsx %>%
-  count(Country, DBDC) %>%
-  group_by(Country) %>%
+InsectQuizScore <- Data_Covariates %>%
+  count(Q12InsectIDQuiz_Score) %>%
   mutate(
     Total = sum(n),
     Percentage = n / Total,
-    Result = sprintf("%d (%s)", n, percent(Percentage, accuracy = 0.1))
+    Result = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))
   ) %>%
-  select(-n, -Total, -Percentage) %>%
-  pivot_wider(names_from = DBDC, values_from = Result) %>%
-  ungroup() %>% 
+  dplyr::select(Result) 
+
+InsectQuizScore %>% 
   write.csv(quote = FALSE)
 
-## tabulate responses by bid level
+
+
+
+# **********************************************************************************
+#### Question 12: Followup ####
+# **********************************************************************************
+
+
+
+Q12_1 <- Data_Covariates %>%
+  count(Q12InsectIDQuizFollowUp_1) %>%
+  mutate(
+    Question = "I did not know that the same type of insect could look so different",
+    Total = sum(n),
+    Percentage = n / Total,
+    Result = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))
+  ) %>%
+  select(-n, -Total, -Percentage) 
+
+
+Q12_2 <- Data_Covariates %>%
+  count(Q12InsectIDQuizFollowUp_2) %>%
+  mutate(
+    Question = "I have seen most of the types of insects pictured before",
+    Total = sum(n),
+    Percentage = n / Total,
+    Result = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))
+  ) %>%
+  select(-n, -Total, -Percentage)
+
+
+
+bind_rows(
+  Q12_1,
+  Q12_2) %>% 
+  write.csv(quote = FALSE)
+
+
+
+
+
+# **********************************************************************************
+#### CE Intro Checks ####
+# **********************************************************************************
+
+
+## As an attention check these were reverse in the survey
+## So I'm reversing them here again back to agree (1) -> disagree (5)
+Data_Covariates$CE_TasksConsequentiality_1_Scaled <- (5 - Data_Covariates$CE_TasksConsequentiality_1)
+Data_Covariates$CE_TasksConsequentiality_2_Scaled <- (5 - Data_Covariates$CE_TasksConsequentiality_2)
+
+# List of the columns (questions) you want to analyze
+CE_Check_Questions <- c("CE_Task_Insect_Check_1", 
+               "CE_Task_Plan_Check_1",
+               "CE_Task_A1_Check_1",
+               "CE_Task_A2_Check_1",
+               "CE_Task_A3_Check_1",
+               "CE_Task_A4_Check_1",
+               "CE_Task_A4_Check_1",
+               "CE_TasksConsequentiality_1_Scaled",
+               "CE_TasksConsequentiality_2_Scaled")
+
+
+
+# Pivot longer to handle multiple questions at once
+CE_Check_Output <- Data_Covariates %>%
+  pivot_longer(cols = all_of(CE_Check_Questions), 
+               names_to = "Question", 
+               values_to = "Response") %>%
+  group_by(Question, Response) %>%
+  summarise(n = n()) %>%
+  ungroup() %>%
+  group_by(Question) %>%
+  mutate(
+    Total = sum(n),
+    Percentage = n / Total,
+    Result = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))
+  ) %>%
+  select(Question, Response, Result) 
+
+
+CE_Check_Output %>% write.csv(quote = FALSE)
+
+
+
+
+# **********************************************************************************
+#### Bid vector ####
+# **********************************************************************************
+
+
+## merge
+Data_Covariates$QX_BidVector_All <- dplyr::coalesce(
+  Data_Covariates$QX_BidVector_Bees,
+  Data_Covariates$QX_BidVector_Beetles,
+  Data_Covariates$QX_BidVector_Wasps
+)
+
+
+
+## Set this summariser up 
+summary_function <- function(data, column) {
+  Data_Covariates %>%
+    summarise(across({{column}}, 
+                     list(Obs = ~round(sum(.x > -1, na.rm = TRUE), 3),
+                          Median = ~round(median(.x, na.rm = TRUE), 3), 
+                          Mean = ~round(mean(.x, na.rm = TRUE), 3), 
+                          "1st" = ~round(quantile(.x, c(0.25), na.rm = TRUE), 3),
+                          "3rd" = ~round(quantile(.x, c(0.75), na.rm = TRUE), 3),
+                          Min = ~round(min(.x, na.rm = TRUE), 3),
+                          Max = ~round(max(.x, na.rm = TRUE), 3)),
+                     .names = "{.fn}"), 
+              .groups = "drop")
+}
+
+
+
+BidVector_Matrix <- rbind(
+  "Bees" = summary_function(data = Data_Covariates, column = QX_BidVector_Bees),
+  "Beetles" = summary_function(data = Data_Covariates, column = QX_BidVector_Beetles),
+  "Wasps" = summary_function(data = Data_Covariates, column = QX_BidVector_Wasps),
+  "All" = summary_function(data = Data_Covariates, column = QX_BidVector_All)
+)
+
+
+BidVector_Matrix %>% write.csv(quote = FALSE)
+
+
+
+Data_Covariates$QX_BidVector_Bees %>% table() %>% write.csv(quote = FALSE)
+Data_Covariates$QX_BidVector_Beetles %>% table() %>% write.csv(quote = FALSE)
+Data_Covariates$QX_BidVector_Wasps %>% table() %>% write.csv(quote = FALSE)
+
+
+
+
+
+# **********************************************************************************
+#### CE debrief ####
+# **********************************************************************************
+
 rbind(
-  cbind(table(USData_Client_Xlsx$Q1[USData_Client_Xlsx$BASE_Numeric == 30], 
-              USData_Client_Xlsx$Bid1_Numeric[USData_Client_Xlsx$BASE_Numeric == 30]), 0),
-  cbind(table(USData_Client_Xlsx$Q1[USData_Client_Xlsx$BASE_Numeric != 30], 
-              USData_Client_Xlsx$Bid1_Numeric[USData_Client_Xlsx$BASE_Numeric != 30]), 0)) %>% 
-  write.csv(quote = FALSE)
-
-
-## Answer question 3
-table(USData_Client_Xlsx$Bid1_Numeric, USData_Client_Xlsx$BASE) %>% t() %>% write.csv(quote = FALSE)
-
-
-
-
-paste0(USData_Client_Xlsx$DBDC %>% table() %>% names(),
-       ": ", 
-       USData_Client_Xlsx$DBDC %>% table(),
-       " (",
-       USData_Client_Xlsx$DBDC %>% table() %>% prop.table() %>% multiply_by(100) %>% round(2),
-       "%)"
+  "CE debrief Easy" = Data_Covariates$CE_Debrief_Easy %>% summary(),
+  "CE debrief Certain" = Data_Covariates$CE_Debrief_Certain %>% summary(),
+  "CE debrief Confident" = Data_Covariates$CE_Debrief_Confident %>% summary()
 )
-
-
-
-
-USData_Client_Xlsx %>% 
-  fwrite(sep = ",", 
-         here("Data/SWACHE_July2024Latest/", 
-              "USData_Main_Data_Cleaned.csv"))
 
 
 
 # **********************************************************************************
-#### Section 5: Debriefing questions  ####
+#### CE ANA ####
 # **********************************************************************************
 
 
-
-# Did you understand that your risk of developing high blood pressure would return to its current level after 10 years even if you chose to pay to reduce your risk over 10 years?
-USData_Client_Xlsx$HBP_10Yr <- ifelse(
-  USData_Client_Xlsx$H3 == "Yes",
-  1, 0)
-
-
-# When you choose between the current and reduced risk, were you thinking you could just adopt a healthier lifestyle to reduce your risk instead of paying?
-USData_Client_Xlsx$HBP_Healthier <- ifelse(
-  USData_Client_Xlsx$H4 == "Yes",
-  1, 0)
-
-
-# Please consider the statement: “I would pay almost anything to improve my health even by a small amount”. Do you…
-USData_Client_Xlsx$HBP_PayAnything <- ifelse(
-  USData_Client_Xlsx$H5 == "…agree",
-  1, 0)
-
-
-
-
-# How much do you agree or disagree with the following statements? - My survey responses reflect what I would have done in real life.
-USData_Client_Xlsx$Response_RealLife <- dplyr::recode(
-  USData_Client_Xlsx$A1_1,
-  "Strongly agree" = 4,
-  "Somewhat agree" = 3,
-  "Neither agree nor disagree" = 2,
-  "Somewhat disagree"          = 1,
-  "Strongly disagree"  = 0
-)
-
-
-# How much do you agree or disagree with the following statements? - The survey provided me with enough information to make informed choices.
-USData_Client_Xlsx$Response_Information <- dplyr::recode(
-  USData_Client_Xlsx$A1_2,
-  "Strongly agree" = 4,
-  "Somewhat agree" = 3,
-  "Neither agree nor disagree" = 2,
-  "Somewhat disagree"          = 1,
-  "Strongly disagree"  = 0
-)
-
-
-# How much do you agree or disagree with the following statements? - I find the description of high blood pressure provided in this survey to be accurate
-USData_Client_Xlsx$Response_Accurate <- dplyr::recode(
-  USData_Client_Xlsx$A1_3,
-  "Strongly agree" = 4,
-  "Somewhat agree" = 3,
-  "Neither agree nor disagree" = 2,
-  "Somewhat disagree"          = 1,
-  "Strongly disagree"  = 0
-)
-
-
-# How confident are you that the information that has been provided in this survey is correct?
-USData_Client_Xlsx$Response_Confident <- dplyr::recode(
-  USData_Client_Xlsx$A2,
-  "Very confident" = 4,
-  "Somewhat confident"                 = 3,
-  "Neither doubtful nor confident"  = 2,
-  "Somewhat doubtful" = 1,
-  "Very doubtful"   = 0
-)
-
-
-# How would you describe your knowledge of high blood pressure before having taken this survey?
-USData_Client_Xlsx$Response_HBP_Before <- dplyr::recode(
-  USData_Client_Xlsx$A3,
-  "Excellent" = 4,
-  "Good" = 3,
-  "Fair" = 2,
-  "Poor" = 1,
-  "Very poor" = 0
-)
-
-# How would you describe your knowledge of high blood pressure after having taken this survey?# How would you describe your knowledge of high blood pressure after having taken this survey?
-USData_Client_Xlsx$Response_HBP_After <- dplyr::recode(
-  USData_Client_Xlsx$A4,
-  "Excellent" = 4,
-  "Good" = 3,
-  "Fair" = 2,
-  "Poor" = 1,
-  "Very poor" = 0
-)
-
-
-
-
-
-# A1_1
-# A1_2
-# A1_3
-# A2
-# A3
-# A4
-# H3
-# H4
-# H5
-
-
-
-
-# **********************************************************************************
-#### Section 4A: Plot general  ####
-# **********************************************************************************
-
-
-TextSize <- 12
-TextType <- element_text(size = TextSize,
-                         colour = "black",
-                         family = "serif")
-
-
-
-Fig1 <- USData_Client_Xlsx %>% 
-  ggplot(
-    aes(x = Bid1_Numeric, y = Question1)) + 
-  geom_smooth(method = "glm",
-              method.args = list(family = "binomial")) + 
-  scale_y_continuous(labels = c("Current\nrisk", 
-                                "Risk\nreduction"), 
-                     breaks = c(0, 1), 
-                     limits = seq(0, 1, 1)) + 
-  theme_bw() + 
-  facet_wrap(~ paste0(Country, " - ", BASE),
-             nrow = 5, 
-             ncol = 2) +
-  xlab("Bid level") + 
-  ylab("") +
-  theme(
-    legend.position = "bottom",
-    legend.background = element_blank(),
-    strip.background = element_rect(fill = "white"),
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    panel.grid.major.y = element_blank(),
-    panel.grid.minor.y = element_blank(),
+## Output survey speeder data
+CE_ANA_Table <- Data_Covariates %>%
+  summarise(
+    Considered_Insect  = paste0(
+      sum(CE_ANA_1  == 1),
+      " (", mean(CE_ANA_1  == 1) %>% 
+        round(2) %>% 
+        multiply_by(100), "%)"),
     
-    axis.text.x = TextType,
-    axis.text.y = TextType,
-    axis.title.y = TextType,
-    axis.title.x = TextType,
-    legend.text = TextType,
-    legend.title = TextType
+    Considered_Encounter  = paste0(
+      sum(CE_ANA_2  == 1),
+      " (", mean(CE_ANA_2  == 1) %>% 
+        round(2) %>% 
+        multiply_by(100), "%)"),
+    
+    Considered_Existence  = paste0(
+      sum(CE_ANA_3  == 1),
+      " (", mean(CE_ANA_3  == 1) %>% 
+        round(2) %>% 
+        multiply_by(100), "%)"),
+    
+    Considered_Bequest  = paste0(
+      sum(CE_ANA_4  == 1),
+      " (", mean(CE_ANA_4  == 1) %>% 
+        round(2) %>% 
+        multiply_by(100), "%)"),
+    
+    Considered_Tax  = paste0(
+      sum(CE_ANA_5  == 1),
+      " (", mean(CE_ANA_5  == 1) %>% 
+        round(2) %>% 
+        multiply_by(100), "%)")) 
+
+
+CE_ANA_Table %>% write.csv(quote = FALSE)
+
+
+
+Data_Covariates$CE_ANA_None <-
+  ifelse(
+    Data_Covariates$CE_ANA_1 == 2 &
+      Data_Covariates$CE_ANA_2 == 2 &
+      Data_Covariates$CE_ANA_3 == 2 &
+      Data_Covariates$CE_ANA_4 == 2 &
+      Data_Covariates$CE_ANA_5 == 2,
+    1,
+    0
+  )
+
+Data_Covariates$CE_ANA_All <-
+  ifelse(
+      Data_Covariates$CE_ANA_1 == 1 &
+      Data_Covariates$CE_ANA_2 == 1 &
+      Data_Covariates$CE_ANA_3 == 1 &
+      Data_Covariates$CE_ANA_4 == 1 &
+      Data_Covariates$CE_ANA_5 == 1,
+    1,
+    0
   )
 
 
 
+# **********************************************************************************
+#### Sliders on perceptions ####
+# **********************************************************************************
+
+rbind(
+  "Beetles_Encounter" = Data_Covariates$Sliding_Beetles_Encounter %>% summary(),
+  "Beetles_Ecology" = Data_Covariates$Sliding_Beetles_Ecology %>% summary(),
+  "Beetles_Conserved" = Data_Covariates$Sliding_Beetles_Conserved %>% summary(),
+  "Beetles_Important" = Data_Covariates$Sliding_Beetles_Important %>% summary(),
+  
+  "Bees_Encounter" = Data_Covariates$Sliding_Bees_Encounter %>% summary(),
+  "Bees_Ecology" = Data_Covariates$Sliding_Bees_Ecology %>% summary(),
+  "Bees_Conserved" = Data_Covariates$Sliding_Bees_Conserved %>% summary(),
+  "Bees_Important" = Data_Covariates$Sliding_Bees_Important %>% summary(),
+  
+  
+  "Wasps_Encounter" = Data_Covariates$Sliding_Wasps_Encounter %>% summary(),
+  "Wasps_Ecology" = Data_Covariates$Sliding_Wasps_Ecology %>% summary(),
+  "Wasps_Conserved" = Data_Covariates$Sliding_Wasps_Conserved %>% summary(),
+  "Wasps_Important" = Data_Covariates$Sliding_Wasps_Important %>% summary()
+) %>% write.csv(quote = FALSE)
 
 
+# I encounter frequently
+# I have a good understanding of the ecological roles that beetles play
+# should be conserved for future generations  
+# important even if no-one encounters them
 
-ggsave(
-  Fig1,
-  device = "png",
-  filename = paste0(here(), "/Output/Figures/", "Fig1_ScopeAnalysis_Pilot_Main_Check.png"),
-  width = 20,
-  height = 15,
-  units = "cm",
-  dpi = 500
-)
+
 
 
 # **********************************************************************************
-#### Section 4B: Plot improved  ####
+#### Visit frequency ####
 # **********************************************************************************
 
-
-Fig2 <- USData_Client_Xlsx %>%
-  mutate(BASE = as.factor(BASE)) %>%  # Ensure BASE is treated as a factor
-  ggplot(aes(x = Bid1_Numeric, y = Question1, fill = BASE)) +
-  geom_ribbon(stat='smooth', 
-              method = "glm", 
-              method.args = list(family = "binomial"), 
-              se = TRUE, 
-              alpha=0.25,  colour = NA) +
-  geom_line(stat='smooth',
-            method = "glm",
-            method.args = list(family = "binomial"), 
-            alpha = 1, linewidth = 1.5, 
-            aes(group = BASE, colour = BASE)) +
-  scale_y_continuous(
-    labels = c("Current\nrisk", "Risk\nreduction"),
-    breaks = c(0, 1),
-    limits = seq(0, 1, 1)
-  ) +
-  facet_grid(~ProbabilityTest_Numeric + RR) +
-  facet_grid( ~ ProbabilityTest_Numeric + RR, 
-              labeller = as_labeller(c('0' = "Prob Test: Fail", 
-                                       '1' = "Prob Test: Pass",
-                                       '10' = "RR: 10",
-                                       '20' = "RR: 20"))) +
-  theme_bw() +
-  scale_colour_manual(values = c("black", "blue")) +
-  scale_fill_manual(values = c("black", "blue")) +
-  coord_cartesian(xlim = c(0, 1000)) +
-  xlab("Bid level") + 
-  ylab("") +
-  theme(
-    legend.position = "bottom",
-    legend.background = element_blank(),
-    strip.background = element_rect(fill = "white"),
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    panel.grid.major.y = element_blank(),
-    panel.grid.minor.y = element_blank(),
-    
-    axis.text.x = TextType,
-    axis.text.y = TextType,
-    axis.title.y = TextType,
-    axis.title.x = TextType,
-    legend.text = TextType,
-    legend.title = TextType
-  )
+rbind(
+  "Child" = Data_Covariates$Visit_Child %>% summary(),
+  "Teen" = Data_Covariates$Visit_Teen %>% summary(),
+  "Adult" = Data_Covariates$Visit_Adult %>% summary()
+) %>% write.csv(quote = FALSE)
 
 
 
 
-
-ggsave(
-  Fig2,
-  device = "png",
-  filename = paste0(here(), "/Output/Figures/", "Fig1_ScopeAnalysis_Main2Check.png"),
-  width = 20,
-  height = 15,
-  units = "cm",
-  dpi = 500
-)
+# List of the columns (questions) you want to analyze
+Visit_Questions <- c("Q41_FreqOfVisitGreenSpace_1", 
+                        "Q41_FreqOfVisitBlueSpace_1",
+                     "Q41_WalkTimeToGreenSpace",
+                     "Q41_WalkTimeToBlueSpace")
 
 
 
-
-
-
-
-
-
-TextFormat <- element_text(size = 10,
-                           colour = "black",
-                           family = "sans")
-
-
-# **********************************************************************************
-#### A2  ####
-# **********************************************************************************
-
-USData_Client_Xlsx %>% 
-  pivot_longer(cols = A2, 
+# Pivot longer to handle multiple questions at once
+Visit_Output <- Data_Covariates %>%
+  pivot_longer(cols = all_of(Visit_Questions), 
                names_to = "Question", 
                values_to = "Response") %>%
-  count(Country, Question, Response) %>% 
-  group_by(Country, Question) %>% 
-  mutate(Percentage = n / sum(n),
-         Label = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))) %>%
-  ungroup() %>% 
-  mutate(Response = factor(Response, levels = 
-                             c("Very confident",
-                               "Somewhat confident",
-                               "Neither doubtful nor confident",
-                               "Somewhat doubtful",
-                               "Very doubtful"))) %>% 
-  dplyr::select(-n, -Percentage) %>% 
-  pivot_wider(names_from = Response, values_from = Label) 
-
-
-# **********************************************************************************
-#### A3  ####
-# **********************************************************************************
-
-
-
-USData_Client_Xlsx %>% 
-  pivot_longer(cols = A3, 
-               names_to = "Question", 
-               values_to = "Response") %>%
-  count(Country, Question, Response) %>% 
-  group_by(Country, Question) %>% 
-  mutate(Percentage = n / sum(n),
-         Label = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))) %>%
-  ungroup() %>% 
-  mutate(Response = factor(Response, levels = 
-                             c(  "Excellent" ,
-                                 "Good",
-                                 "Fair",
-                                 "Poor",
-                                 "Very poor"))) %>% 
-  dplyr::select(-n, -Percentage) %>% 
-  pivot_wider(names_from = Response, values_from = Label) %>% write.csv(quote = FALSE)
-
-
-
-
-# **********************************************************************************
-#### A4  ####
-# **********************************************************************************
-
-
-
-USData_Client_Xlsx %>% 
-  pivot_longer(cols = A4, 
-               names_to = "Question", 
-               values_to = "Response") %>%
-  count(Country, Question, Response) %>% 
-  group_by(Country, Question) %>% 
-  mutate(Percentage = n / sum(n),
-         Label = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))) %>%
-  ungroup() %>% 
-  mutate(Response = factor(Response, levels = 
-                             c(  "Excellent" ,
-                                 "Good",
-                                 "Fair",
-                                 "Poor",
-                                 "Very poor"))) %>% 
-  dplyr::select(-n, -Percentage) %>% 
-  pivot_wider(names_from = Response, values_from = Label) %>% write.csv(quote = FALSE)
-
-
-
-
-
-USData_Client_Xlsx %>% 
-  pivot_longer(cols = H3:H4, 
-               names_to = "Question", 
-               values_to = "Response") %>%
-  count(Country, Question, Response) %>% 
-  group_by(Country, Question) %>% 
-  mutate(Percentage = n / sum(n),
-         Label = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))) %>%
+  group_by(Question, Response) %>%
+  summarise(n = n()) %>%
   ungroup() %>%
-  dplyr::select(-n, -Percentage) %>% 
-  pivot_wider(names_from = Response, values_from = Label) %>% write.csv(quote = FALSE)
+  group_by(Question) %>%
+  mutate(
+    Total = sum(n),
+    Percentage = n / Total,
+    Result = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))
+  ) %>%
+  select(Question, Response, Result) 
 
 
 
 
 
-USData_Client_Xlsx %>%
-  pivot_longer(cols = H5,
-               names_to = "Question",
+
+# **********************************************************************************
+#### Debriefing ####
+# **********************************************************************************
+
+
+# List of the columns (questions) you want to analyze
+Misc1_Questions <- c("Q42_Charity", 
+                     "Q43_Citizen",
+                     "Q44_Sight",
+                     "Q45_Garden",
+                     "Q46_Farm",
+                     "Q47_Fish")
+
+
+
+# Pivot longer to handle multiple questions at once
+Misc1_Output <- Data_Covariates %>%
+  pivot_longer(cols = all_of(Misc1_Questions), 
+               names_to = "Question", 
                values_to = "Response") %>%
-  count(Country, Question, Response) %>%
-  group_by(Country, Question) %>%
-  mutate(Percentage = n / sum(n),
-         Label = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))) %>%
+  group_by(Question, Response) %>%
+  summarise(n = n()) %>%
   ungroup() %>%
-  dplyr::select(-n,-Percentage) %>%
-  pivot_wider(names_from = Response, values_from = Label) %>% write.csv(quote = FALSE)
+  group_by(Question) %>%
+  mutate(
+    Total = sum(n),
+    Percentage = n / Total,
+    Result = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))
+  ) %>%
+  select(Question, Response, Result) 
 
+
+Misc1_Output %>% write.csv(quote = FALSE)
 
 
 # **********************************************************************************
-#### Section 2: Experimental  ####
+#### Education ####
 # **********************************************************************************
 
-USData_Client_Xlsx %>% 
-  pivot_longer(cols = starts_with("A1_"), names_to = "Question", values_to = "Response") %>%
-  count(Country, Question, Response) %>% 
-  group_by(Country, Question) %>% 
-  mutate(Percentage = n / sum(n),
-         Label = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))) %>%
-  ungroup() %>% 
-  mutate(Response = factor(Response, levels = c("Strongly disagree", "Somewhat disagree",  "Neither agree nor disagree", "Somewhat agree", "Strongly agree"))) %>% 
-  dplyr::select(-n, -Percentage) %>% 
-  pivot_wider(names_from = Response, values_from = Label) %>% 
-  write.csv(quote = FALSE)
+
+Data_Covariates %>%
+  pivot_longer(cols = Q48_Education, 
+               names_to = "Question", 
+               values_to = "Response") %>%
+  group_by(Question, Response) %>%
+  summarise(n = n()) %>%
+  ungroup() %>%
+  group_by(Question) %>%
+  mutate(
+    Total = sum(n),
+    Percentage = n / Total,
+    Result = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))
+  ) %>%
+  select(Question, Response, Result) %>% write.csv(quote = FALSE)
+
+
+# **********************************************************************************
+#### Education ####
+# **********************************************************************************
+
+
+Data_Covariates %>%
+  pivot_longer(cols = Pretest_SliderOrLikert, 
+               names_to = "Question", 
+               values_to = "Response") %>%
+  group_by(Question, Response) %>%
+  summarise(n = n()) %>%
+  ungroup() %>%
+  group_by(Question) %>%
+  mutate(
+    Total = sum(n),
+    Percentage = n / Total,
+    Result = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))
+  ) %>%
+  select(Question, Response, Result) %>% write.csv(quote = FALSE)
+
+
+# **********************************************************************************
+#### Discounting ####
+# **********************************************************************************
+
+
+# List of the columns (questions) you want to analyze
+Discounting_Questions <- c("QDiscounting_1", 
+                     "QDiscounting_2",
+                     "QDiscounting_3",
+                     "QDiscounting_4",
+                     "QDiscounting_5",
+                     "QDiscounting_6",
+                     "QDiscounting_7",
+                     "QDiscounting_8",
+                     "QDiscounting_9",
+                     "QDiscounting_10")
+
+
+# Pivot longer to handle multiple questions at once
+Discounting_Output <- Data_Covariates %>%
+  pivot_longer(cols = all_of(Discounting_Questions), 
+               names_to = "Question", 
+               values_to = "Response") %>%
+  group_by(Question, Response) %>%
+  summarise(n = n()) %>%
+  ungroup() %>%
+  group_by(Question) %>%
+  mutate(
+    Total = sum(n),
+    Percentage = n / Total,
+    Result = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))
+  ) %>%
+  select(Question, Response, Result) 
+
+Discounting_Output%>% write.csv(quote = FALSE)
 
 
 
-Test_A <- USData_Client_Xlsx %>% 
-  pivot_longer(cols = starts_with("A1_"), names_to = "Question", values_to = "Response") %>%
-  count(Country, Question, Response) %>% 
-  group_by(Country, Question) %>% 
-  mutate(Percentage = n / sum(n),
-         Label = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))) %>%
-  ungroup() %>% 
-  mutate(Response = factor(Response, levels = c("Strongly disagree", "Somewhat disagree",  "Neither agree nor disagree", "Somewhat agree", "Strongly agree"))) %>% 
-  ggplot(aes(x = Country, y = n, fill = Response)) + 
-  geom_bar(stat = "identity", position = "dodge") +
-  labs(y = "Count", title = "Responses by Country and Question", fill = "Response") +
-  scale_fill_brewer(palette = "Blues") +
-  theme_bw() +
-  facet_wrap(~ Question, 
-             labeller = as_labeller(c("A1_1" = "A1_1: Real life", 
-                                      "A1_2" = "A1_2: Informed",
-                                      "A1_3" = "A1_3: Accurate"))) +
-  guides(fill = guide_legend(nrow = 3)) +
-  theme(legend.position = "bottom",
-        legend.background=element_blank(),
-        legend.box.background = element_rect(colour="black"),
-        axis.text.x = TextFormat, 
-        axis.text.y = TextFormat,
-        text = TextFormat,
-        legend.text = TextFormat)
 
-
-
-
-
-ggsave(
-  Test_A,
-  device = "png",
-  filename = paste0(here(), 
-                    "/Output/Figures/", 
-                    "Maincheck_Test_A.png"),
-  width = 20,
-  height = 15,
-  units = "cm",
-  dpi = 500
-)
-
-
-
-
-
-
-
-
-
-
-
-
-Test_B <- USData_Client_Xlsx %>% 
-  pivot_longer(cols = c(A3, A4), names_to = "Question", values_to = "Response") %>%
-  count(Country, Question, Response) %>% 
-  group_by(Country, Question) %>% 
-  mutate(Percentage = n / sum(n),
-         Label = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))) %>%
-  ungroup() %>% 
-  mutate(Response = factor(Response, levels = c(  "Excellent" ,
-                                                  "Good",
-                                                  "Fair",
-                                                  "Poor",
-                                                  "Very poor"))) %>% 
-  ggplot(aes(x = Question, y = n, fill = Response)) + 
-  geom_bar(stat = "identity", position = "dodge") +
-  labs(y = "Count", title = "Responses by Country and Question", fill = "Response") +
-  scale_x_discrete(labels = c("Before", "After"))+
-  scale_fill_brewer(palette = "Blues", direction = -1) +
-  theme_bw() +
-  facet_wrap(~ Country) +
-  guides(fill = guide_legend(nrow = 3)) +
-  theme(legend.position = "bottom",
-        legend.background=element_blank(),
-        legend.box.background = element_rect(colour="black"),
-        axis.text.x = TextFormat, 
-        axis.text.y = TextFormat,
-        text = TextFormat,
-        legend.text = TextFormat)
-
-
-
-ggsave(
-  Test_B,
-  device = "png",
-  filename = paste0(here(), 
-                    "/Output/Figures/", 
-                    "Maincheck_Test_B.png"),
-  width = 20,
-  height = 15,
-  units = "cm",
-  dpi = 500
-)
