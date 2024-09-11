@@ -235,6 +235,171 @@ QualData_Q10InsectWords_clean_Freq_Sorted <- sort(QualData_Q10InsectWords_clean_
 QualData_Q10InsectWords_clean_Freq_Sorted %>% write.csv(quote = FALSE)
 
 
+
+# **********************************************************************************
+#### Sociodemographics: Recode class ####
+# **********************************************************************************
+
+Data_Covariates$ClassDummy <-
+  ifelse(
+    Data_Covariates$Q6Occupation %in% c(
+      6, 7, 8, 9, 10),
+    1, ## ABC1
+    0 ## C2DE
+  )
+
+Data_Covariates$EmployDummy_Retired <-
+  ifelse(
+    Data_Covariates$Q6Occupation  == 3,
+    1, ## Retired
+    0 ## Other
+  )
+
+
+Data_Covariates$EmployDummy_Employed <-
+  ifelse(
+    Data_Covariates$Q6Occupation > 4,
+    1, ## Any other level
+    0 ## Homemaker/housewife or househusband, Student/Full time education, Retired, Unemployed/on benefit
+  )
+
+# ABC1:
+# "Senior management",
+# "Office/clerical/administration",
+# "Crafts/tradesperson/skilled worker",
+# "Middle management",
+# "Professional"
+
+# **********************************************************************************
+#### Sociodemographics: Recode income and age  ####
+# **********************************************************************************
+
+
+## Recode income using midpoints as per OECD
+## And categorising agegroups
+Data_Covariates <- Data_Covariates %>%
+  dplyr::mutate(
+    IncomeMidpoints = dplyr::case_when(
+      is.na(Q7Income) ~ NA,
+      Q7Income %in% "1" ~	(0.5 * 0) + (0.5 * 1000),
+      Q7Income %in% "2" ~	(0.5 * 1001) + (0.5 * 1500),
+      Q7Income %in% "3" ~	(0.5 * 1501) + (0.5 * 2000),
+      Q7Income %in% "4" ~	(0.5 * 2001) + (0.5 * 2500),
+      Q7Income %in% "5" ~	(0.5 * 2501) + (0.5 * 3000),
+      Q7Income %in% "6" ~	(0.5 * 3001) + (0.5 * 3500),
+      Q7Income %in% "7" ~	(0.5 * 3501) + (0.5 * 4000),
+      Q7Income %in% "8" ~	(0.5 * 4001) + (0.5 * 6000),
+      Q7Income %in% "9" ~ 6001 , # "£6,001 or more" ~ 
+      Q7Income %in% "10" ~ NA # "Prefer not to say." ~
+    ),
+    
+    Income_MissingDummy  = dplyr::case_when( ## missing data or "prefer not to say"
+      is.na(Q7Income) ~ 1,
+      Q7Income == 10 ~ 1,
+      Q7Income < 10 ~	0,
+    ),
+    
+    AgeGroup = dplyr::case_when(
+      is.na(Q1Age) ~ NA,
+      Q1Age < 30 ~	"18-29",
+      Q1Age <= 44 ~	"30-44",
+      Q1Age <= 60 ~	"45-60",
+      Q1Age > 60 ~	"60+"),
+    
+    Dummy_HighEducation = dplyr::case_when(
+      is.na(Q48_Education ) ~ NA,
+      Q48_Education  < 5 ~	0,
+      Q48_Education < 7 ~	1,
+      Q48_Education == 7 ~	0),
+  )
+
+
+
+Data_Covariates$Age_1829Dummy <-
+  ifelse(Data_Covariates$AgeGroup %in% c("18-29"),
+         1,
+         0) %>% as.numeric()
+
+Data_Covariates$Age_3044Dummy <-
+  ifelse(Data_Covariates$AgeGroup %in% c("30-44"),
+         1,
+         0) %>% as.numeric()
+
+Data_Covariates$Age_4560Dummy <-
+  ifelse(Data_Covariates$AgeGroup %in% c("45-60"),
+         1,
+         0) %>% as.numeric()
+
+Data_Covariates$Age_60Dummy <-
+  ifelse(Data_Covariates$AgeGroup %in% c("60+"),
+         1,
+         0) %>% as.numeric()
+
+
+Data_Covariates$AgeGroup_Numeric <- dplyr::recode(Data_Covariates$AgeGroup,
+                                                  '18-29' = 23.50,
+                                                  '30-44' = 37,
+                                                  '45-60' = 52.5,
+                                                  '60+' = 60)     
+
+# **********************************************************************************
+#### Sociodemographics: Missing income ####
+# **********************************************************************************
+
+
+Model_PredictMissingIncome <- lm(formula = log(Q7Income) ~
+                                   AgeGroup +
+                                   Dummy_HighEducation +
+                                   EmployDummy_Retired +
+                                   EmployDummy_Employed,
+                                 data = Data_Covariates)
+
+
+Model_PredictMissingIncome_Predictions <-  predict(Model_PredictMissingIncome, 
+                                                   newdata = Data_Covariates[Data_Covariates$Income_MissingDummy == 1, ])
+
+Data_Covariates$IncomeMidpoints_PlusMissing <- ifelse(Data_Covariates$Income_MissingDummy == 1, ## If missing
+                                                      Model_PredictMissingIncome_Predictions %>% exp(), ## Add raw predicted income
+                                                      Data_Covariates$IncomeMidpoints) ## if not use reported income
+
+
+# **********************************************************************************
+#### Sociodemographics: Summarise ####
+# **********************************************************************************
+
+
+# List of the columns (questions) you want to analyze
+SD_Questions <- c("AgeGroup_Numeric",
+                  "Q2Gender",                         
+                  "Q3Country",                        
+                  "Q4Urban",                          
+                  "Q5Ethnicity",                        
+                  "Q6Occupation",
+                  "ClassDummy",
+                  "Q7Income")
+
+# "Q1Age",                            
+# "Q8Postcode",            
+
+
+# Pivot longer to handle multiple questions at once
+SD_Output <- Data_Covariates %>%
+  pivot_longer(cols = all_of(SD_Questions), 
+               names_to = "Question", 
+               values_to = "Response") %>%
+  group_by(Question, Response) %>%
+  summarise(n = n()) %>%
+  ungroup() %>%
+  group_by(Question) %>%
+  mutate(
+    Total = sum(n),
+    Percentage = n / Total,
+    Result = sprintf("%d (%s)", n, scales::percent(Percentage, accuracy = 0.1))
+  ) %>%
+  select(Question, Response, Result) 
+
+SD_Output %>% write.csv(quote = FALSE)
+
 # **********************************************************************************
 #### Question 11 ####
 # **********************************************************************************
@@ -656,7 +821,7 @@ Data_Covariates %>%
 
 
 # **********************************************************************************
-#### Education ####
+#### Pretest ####
 # **********************************************************************************
 
 
@@ -712,6 +877,32 @@ Discounting_Output <- Data_Covariates %>%
 
 Discounting_Output%>% write.csv(quote = FALSE)
 
+
+# **********************************************************************************
+#### Text responses at the end ####
+# **********************************************************************************
+
+
+table(Data_Covariates$Pretest_AnyDifficultQuestions) %>% write.csv(quote = FALSE)
+
+
+
+table(Data_Covariates$FurtherComments) %>% write.csv(quote = FALSE)
+
+
+
+
+# **********************************************************************************
+#### Section X: Export ####
+# **********************************************************************************
+
+
+## Exporting as CSV for ease
+## and using fwrite() is much faster than write.csv()
+Data_Covariates %>% 
+  fwrite(sep = ",", 
+         here("Data/Pilot1/", 
+              "Data_Covariates_Step1.csv"))
 
 
 
