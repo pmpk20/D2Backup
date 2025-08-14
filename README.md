@@ -1,9 +1,11 @@
 Author: Dr Peter King (p.king1@leeds.ac.uk)
 
-Last Change: 12/06/2025
+Last Change: 14/08/2025
 
 ## DRUID Insect survey
 ### Here you will find the survey design, experimental design, R code, raw responses, and model outputs.
+
+### PLEASE NOTE: Data is not publicly available while we're in the review process. 
 
 #### Description:
 - /Data/Main/ you can find the anonymised survey data for N = 1,684 online UK respondents from October 2024.
