@@ -230,7 +230,7 @@ D2_Truncated_LC_3C_MXL_NoDR_V3_SimulatedMeans_Wellbeing_Points_V1 <-
   
   labs(
     x = "Wellbeing Level",
-    y = "Willingness to Pay (WTP)",
+    y = "Simulated Marginal WTP (GBP) in income tax\nper household, per month",
     # title = "WTP by Wellbeing Level, Attribute, Insect Type and Class",
     colour = "Level",
     fill = "Level"

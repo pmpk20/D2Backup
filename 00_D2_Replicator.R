@@ -170,7 +170,8 @@ here("Scripts/Tables/XX_Table2_WellbeingLVs.R") %>% source()
 ## These create the Figures in-text as it stands (20/05)
 here("Scripts/Figures/XX_Biowell_Main_Distribution.R") %>% source()
 here("Scripts/Figures/XX_Figure3_WellbeingWTP.R") %>% source()
-here("Scripts/Figures/XX_WTP_BarChart_V1.R") %>% source()
+here("Scripts/Figures/XX_Figure2_WTPClasses.R") %>% source() ## Find Figure 2 here
+# here("Scripts/Figures/XX_WTP_BarChart_V1.R") %>% source() ## Find Figure 2 here
 
 
 ## TODO: Supplementary-Information tables/figures
