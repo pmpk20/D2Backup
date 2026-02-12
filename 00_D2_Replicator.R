@@ -157,25 +157,84 @@ here("Scripts/CEModelling/D2_Truncated_LC_3C_MXL_NoDR_V3_SimulatedMeanWTP.R") %>
 
 
 
+
+
+# ****************************
+# Section 2B: Prepare variables: ####
+# ****************************
+
+
+## This is respondent data in long format
+database <- here("Data/Main", "database_Step3.csv") %>% fread() %>% data.frame()
+
+
+## This is respondent data in wide format
+Data_Covariates <- here("Data/Main", 
+                        "Data_Covariates_Spatial_Step5.csv") %>% fread() %>% data.frame()
+
+
+## It is easier to grab serialSQ from database and append to wide
+Data_Covariates$SerialSQ <- database %>%
+  distinct(Respondent, SerialSQ) %>%
+  .$SerialSQ
+
+
+# ## Drop weird responses
+Data_Covariates <- Data_Covariates %>% dplyr::filter(SerialSQ != 1 &
+                                                       Protest_True == 1 &
+                                                       CE_ANA_None != 1)
+
+
+## Append class membership best guess
+D2_Truncated_LC_3C_MXL_NoDR_V1_3C_UCWTP <- here("CEOutput/Main/LCM",
+                                                "D2_Truncated_LC_3C_MXL_NoDR_V3_model_PiValues.rds") %>% 
+  readRDS()
+
+
+ClassMembership <- apply(do.call(cbind, D2_Truncated_LC_3C_MXL_NoDR_V1_3C_UCWTP), 1, which.max)
+
+Data_Covariates$ClassMembership <- ClassMembership
+
+
+## Export
+Data_Covariates %>% 
+  data.frame() %>% 
+  fwrite(
+    sep = ",",
+    here(
+      "Data/Main",
+      "Data_Covariates_Spatial_Step6_anonymised.csv"
+    )
+  )
+
 # **********************************************************************************
-#### Section Three: Post-estimation summaries ####
+#### Section Three: Tables and figures in-text ####
 # **********************************************************************************
 
 
 ## These create the tables in-text as it stands (2)
-here("Scripts/Tables/XX_Table1_SampleVsQuota.R") %>% source()
-here("Scripts/Tables/XX_Table2_WellbeingLVs.R") %>% source()
+here("Scripts/Tables/XX_Table1_SampleVsQuota.R") %>% source() ## Table1
 
 
-## These create the Figures in-text as it stands (20/05)
-here("Scripts/Figures/XX_Biowell_Main_Distribution.R") %>% source()
-here("Scripts/Figures/XX_Figure3_WellbeingWTP.R") %>% source()
-here("Scripts/Figures/XX_Figure2_WTPClasses.R") %>% source() ## Find Figure 2 here
-# here("Scripts/Figures/XX_WTP_BarChart_V1.R") %>% source() ## Find Figure 2 here
+
+## Survey/Figure1 to find that
+here("Scripts/Figures/XX_Figure2_WellbeingDistribution.R") %>% source()
+here("Scripts/Figures/XX_Figure3_WTPClasses.R") %>% source() ## Find Figure 2 here
+here("Scripts/Figures/XX_Figure4_WellbeingWTP.R") %>% source()
+
+# here("Scripts/Figures/XX_WTP_BarChart_V1.R") %>% source() 
 
 
-## TODO: Supplementary-Information tables/figures
+# **********************************************************************************
+#### Section Four: Supplementary tables and figures ####
+# **********************************************************************************
 
+
+here("Scripts/Figures/XX_Figure_CEDebrief.R") %>% source() # Figure B1
+here("Scripts/Tables/XX_TableB1_SamplevsPopulation.R") %>% source() # Table B2
+## TODO: Supplementary-Information Tables C1 + C2 + C3
+here("Scripts/Figures/XX_FigureX_WTPClasses_Distribution.R") %>% source() # Figure C1
+here("Scripts/Tables/XX_TableC3_WellbeingLVs.R") %>% source() ## Moved from MS to Supplement
 
 #### End of script
 # *************************************************************************

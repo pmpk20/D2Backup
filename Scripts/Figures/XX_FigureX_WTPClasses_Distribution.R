@@ -209,7 +209,7 @@ D2_FigureX_WTPClasses_Distribution <-
     outline_bars = TRUE,
     slab_colour = "black",
     slab_linewidth = 0.5,
-    normalize = "panels",
+    normalize = "groups",
     breaks = "Sturges",
     point_interval = "mean_qi"
   ) +

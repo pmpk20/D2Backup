@@ -1,8 +1,9 @@
 #### D2: Debriefing Descriptives  ###############
 # Script author: Peter King (p.king1@leeds.ac.uk)
-# Last Edited: 31/10/2024.
-# COMMENTS: Plotting and summarising biowell
-# - updated with resampled
+# Last Edited: 12/02/2026
+# COMMENTS: CE debriefing scale by measure + class
+
+
 
 # **********************************************************************************
 #### Section 0: Setup environment and replication information ####
@@ -52,7 +53,7 @@ library(RColorBrewer)
 # Using fread() from data.table as significantly faster than read.csv()
 # Store data in Data subfolder so referencing it using here() package
 Data <-
-  here("Data/Main", "Data_Covariates_Spatial_Step5_anonymised.csv") %>% fread() %>% data.frame()
+  here("Data/Main", "Data_Covariates_Spatial_Step6_anonymised.csv") %>% fread() %>% data.frame()
 
 
 
@@ -64,12 +65,20 @@ PlotData <- cbind(
   "A2_Check" = Data$CE_Task_A2_Check_1,
   "A3_Check" = Data$CE_Task_A3_Check_1,
   "A4_Check" = Data$CE_Task_A4_Check_1,
-  "A5_Check" = Data$CE_Task_A5_Check_1
+  "A5_Check" = Data$CE_Task_A5_Check_1,
+  "Class" = Data$ClassMembership
 ) %>%
   data.frame() %>%
-  pivot_longer(cols = everything(),
+  pivot_longer(cols = 1:7,
                names_to = "name",
-               values_to = "value")
+               values_to = "value") %>% 
+  mutate(
+    Class = factor(Class, 
+                   levels = c("1", "2", "3"),
+                   labels = c("Class 1 (Pro-insect)",
+                              "Class 2 (Insect-averse)", 
+                              "Class 3 (Ambivalent)"))
+  )
 
 
 # **********************************************************************************
@@ -110,7 +119,8 @@ TextSetup <- element_text(size = TextSize,
 
 
 # Plotting
-FX <-  PlotData %>%
+FigureB1 <- 
+  PlotData %>%
   ggplot(aes(
     x = value %>% as.factor(),
     y = name,
@@ -124,6 +134,9 @@ FX <-  PlotData %>%
                             aes(
                               point_size = 1.5
                             )) +
+  
+  facet_grid( ~ Class,
+             labeller = labeller(Class = label_wrap_gen(width = 15))) +
   
   # Custom x-axis labels
   scale_x_discrete(
@@ -174,9 +187,9 @@ FX <-  PlotData %>%
 # Date <- gsub(pattern = "-",replacement = "_",Sys.Date())
 ## Save output in highest DPI
 ggsave(
-  FX,
+  FigureB1,
   device = "jpeg",
-  filename = here("OtherOutput/Figures", "CEDebrief_Distributions_Main.jpg"),
+  filename = here("OtherOutput/Figures", "FigureB1_CEDebrief_Distributions_Main.jpg"),
   width = 20,
   height = 25,
   units = "cm",

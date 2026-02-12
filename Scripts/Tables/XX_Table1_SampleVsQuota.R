@@ -429,8 +429,19 @@ names(final_table) <- c("Variable", "Class Summaries", "Class 1 (Pro-insect)", "
 # *************************************************************************
 
 
+TableOutput_ClassAllocation <- final_table
+
+
 TableOutput_ClassAllocation  %>% write.csv(quote = FALSE, row.names = FALSE)
-TableOutput_ClassAllocation %>% fwrite(sep = ",", here("CEOutput/Main/LCM", "D2_Truncated_LC_3C_MXL_NoDR_V1_ClassAllocation.txt"))
+
+
+TableOutput_ClassAllocation %>% fwrite(
+  sep = ",",
+  here(
+    "CEOutput/Main/LCM",
+    "D2_Truncated_LC_3C_MXL_NoDR_V1_ClassAllocation.txt"
+  )
+)
 
 
 
