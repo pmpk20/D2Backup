@@ -1,6 +1,6 @@
 Author: Dr Peter King (p.king1@leeds.ac.uk)
 
-Last Change: 14/08/2025
+Last Change: 12/02/2026
 
 ## DRUID Insect survey
 ### Here you will find the survey design, experimental design, R code, raw responses, and model outputs.
