@@ -41,7 +41,7 @@ library(janitor)
 
 Data_Covariates <-
   here("Data/Main", "DRUID_resampling_covariates_anonymised_2024_10_31.xlsx") %>% 
-  readxl::read_xlsx(sheet = "Data") %>% 
+  readxl::read_xlsx(sheet = "Sheet1") %>% 
   data.frame()
 
 

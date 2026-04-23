@@ -1,20 +1,19 @@
-#### D2: Insects survey  ###############
+#### D2: Insects survey ###############
 # Function: To list all files in one go
 # Author: Dr Peter King (p.king1@leeds.ac.uk)
-# Last Edited: 20/05/2025
-# ToDo: 
-## - Add code for supplementary information
-## - Change script numbers
-## - Push replication data
+# Last Edited: 23/04/2026
+# Changes:
+## - Tidied library calls to match sessionInfo()
+## - Extracted class membership step to 05_Druid_Setup_ClassMembership.R
+## - Renumbered and renamed all scripts to Druid convention
+## - Moved exploratory scripts to end as future work
 
 
 # **********************************************************************************
 #### Section 0: Replication Information ####
-## Here is the output of sessionfo.
-# **********************************************************************************
+## **********************************************************************************
 
 
-# here() = ""C:/Users/earpkin/OneDrive - University of Leeds/DRUID/D2/Analysis/D2Backup""
 # ─ Session info ─────────────────────────────────────
 # setting  value
 # version  R version 4.5.0 (2025-04-11 ucrt)
@@ -28,8 +27,7 @@
 # date     2025-05-20
 # rstudio  2023.06.2+561 Mountain Hydrangea (desktop)
 # pandoc   NA
-# quarto   ERROR: Unknown command "TMPDIR=C:/Users/earpkin/AppData/Local/Temp/RtmpKgCcs8/file7187aba4677". Did you mean command "create-project"? @ C:\\PROGRA~1\\RStudio\\RESOUR~1\\app\\bin\\quarto\\bin\\quarto.exe
-# 
+#
 # ─ Packages ─────────────────────────────────────────
 # package      * version    date (UTC) lib source
 # apollo       * 0.3.5      2025-03-12 [1] CRAN (R 4.5.0)
@@ -101,140 +99,84 @@
 # vctrs          0.6.5      2023-12-01 [1] CRAN (R 4.5.0)
 # withr          3.0.2      2024-10-28 [1] CRAN (R 4.5.0)
 # zoo            1.8-14     2025-04-10 [1] CRAN (R 4.5.0)
-# 
+#
 # [1] C:/Users/earpkin/AppData/Local/Programs/R/R-4.5.0/library
 # * ── Packages attached to the search path.
 
 
+# **********************************************************************************
+#### Section 1: Libraries ####
+## **********************************************************************************
 
 
-## Libraries here: -----------------------------------------------------------------
-## Setting up all relevant libraries
+library(apollo)
 library(data.table)
 library(magrittr)
 library(dplyr)
 library(tidyverse)
 library(here)
-library(DCchoice)
 library(janitor)
-library(betareg)
-library(boot)
-library(AER)
-library(snow)
-library(scales)
-library(survminer)
 library(ggplot2)
-library(ggtext)
-library(rstatix)
+library(ggridges)
+library(reshape2)
+library(MASS)
+library(sessioninfo)
 
 
 # **********************************************************************************
-#### Section One: Prepare Data For Analysis ####
-# **********************************************************************************
+#### Section 2: Data Preparation ####
+## **********************************************************************************
 
 
-## Don't need to run these every time
-here("Scripts/Setup/01_Cleaning_Main1.R") %>% source()
-here("Scripts/Setup/02_Discounting_Main.R") %>% source()
-here("Scripts/Setup/03_MergeCE_Main.R") %>% source()
-here("Scripts/Setup/04_Postcodes.R") %>% source()
-
-## Don't need to run these
-# here("Scripts/Setup/05_Sliders_FactorAnalysis.R") %>% source() 
-# here("Scripts/Setup/XX_QualAnalysis.R") %>% source() 
+here("Scripts/Setup/01_Druid_Setup_CleaningMain.R") %>% source()
+here("Scripts/Setup/02_Druid_Setup_DiscountingMain.R") %>% source()
+here("Scripts/Setup/03_Druid_Setup_MergeCE.R") %>% source()
+here("Scripts/Setup/04_Druid_Setup_Postcodes.R") %>% source()
+here("Scripts/Setup/05_Druid_Setup_SlidersFactorAnalysis.R") %>% source()
 
 
 
 # **********************************************************************************
-#### Section Two: Estimation ####
-# **********************************************************************************
+#### Section 3: Estimation ####
+## **********************************************************************************
 
 
-## These are the models in-text
-here("Scripts/CEModelling/D2_Truncated_LC_3C_MXL_NoDR_V3.R") %>% source()
-here("Scripts/CEModelling/D2_Truncated_LC_3C_MXL_NoDR_V3_SimulatedMeanWTP.R") %>% source()
+here("Scripts/CEModelling/07_Druid_Model_TruncatedLC3C.R") %>% source()
+here("Scripts/CEModelling/08_Druid_Model_SimulatedMeanWTP.R") %>% source()
 
 
-
-
-
-
-# ****************************
-# Section 2B: Prepare variables: ####
-# ****************************
-
-
-## This is respondent data in long format
-database <- here("Data/Main", "database_Step3.csv") %>% fread() %>% data.frame()
-
-
-## This is respondent data in wide format
-Data_Covariates <- here("Data/Main", 
-                        "Data_Covariates_Spatial_Step5.csv") %>% fread() %>% data.frame()
-
-
-## It is easier to grab serialSQ from database and append to wide
-Data_Covariates$SerialSQ <- database %>%
-  distinct(Respondent, SerialSQ) %>%
-  .$SerialSQ
-
-
-# ## Drop weird responses
-Data_Covariates <- Data_Covariates %>% dplyr::filter(SerialSQ != 1 &
-                                                       Protest_True == 1 &
-                                                       CE_ANA_None != 1)
-
-
-## Append class membership best guess
-D2_Truncated_LC_3C_MXL_NoDR_V1_3C_UCWTP <- here("CEOutput/Main/LCM",
-                                                "D2_Truncated_LC_3C_MXL_NoDR_V3_model_PiValues.rds") %>% 
-  readRDS()
-
-
-ClassMembership <- apply(do.call(cbind, D2_Truncated_LC_3C_MXL_NoDR_V1_3C_UCWTP), 1, which.max)
-
-Data_Covariates$ClassMembership <- ClassMembership
-
-
-## Export
-Data_Covariates %>% 
-  data.frame() %>% 
-  fwrite(
-    sep = ",",
-    here(
-      "Data/Main",
-      "Data_Covariates_Spatial_Step6_anonymised.csv"
-    )
-  )
+here("Scripts/Setup/06_Druid_Setup_ClassMembership.R") %>% source()
 
 # **********************************************************************************
-#### Section Three: Tables and figures in-text ####
-# **********************************************************************************
+#### Section 4: Tables and Figures (in-text) ####
+## **********************************************************************************
 
 
-## These create the tables in-text as it stands (2)
-here("Scripts/Tables/XX_Table1_SampleVsQuota.R") %>% source() ## Table1
-
-
-
-## Survey/Figure1 to find that
-here("Scripts/Figures/XX_Figure2_WellbeingDistribution.R") %>% source()
-here("Scripts/Figures/XX_Figure3_WTPClasses.R") %>% source() ## Find Figure 2 here
-here("Scripts/Figures/XX_Figure4_WellbeingWTP.R") %>% source()
-
-# here("Scripts/Figures/XX_WTP_BarChart_V1.R") %>% source() 
+here("Scripts/Tables/09_Druid_Table_SampleVsQuota.R") %>% source()           # Table 1
+here("Scripts/Figures/10_Druid_Figure_WellbeingDistribution.R") %>% source() # Figure 2
+here("Scripts/Figures/11_Druid_Figure_WTPClasses.R") %>% source()            # Figure 3
+here("Scripts/Figures/12_Druid_Figure_WellbeingWTP.R") %>% source()          # Figure 4
 
 
 # **********************************************************************************
-#### Section Four: Supplementary tables and figures ####
+#### Section 5: Supplementary Tables and Figures ####
+## **********************************************************************************
+
+
+here("Scripts/Figures/13_Druid_Figure_CEDebrief.R") %>% source()              # Figure B1
+here("Scripts/Tables/14_Druid_Table_SampleVsPopulation.R") %>% source()       # Table B2
+here("Scripts/Figures/15_Druid_Figure_WTPClassesDistribution.R") %>% source() # Figure C1
+here("Scripts/Tables/16_Druid_Table_WellbeingLVs.R") %>% source()             # Table C3
+
+
 # **********************************************************************************
+#### Section 6: Future Work (exploratory — not in paper) ####
+## **********************************************************************************
 
 
-here("Scripts/Figures/XX_Figure_CEDebrief.R") %>% source() # Figure B1
-here("Scripts/Tables/XX_TableB1_SamplevsPopulation.R") %>% source() # Table B2
-## TODO: Supplementary-Information Tables C1 + C2 + C3
-here("Scripts/Figures/XX_FigureX_WTPClasses_Distribution.R") %>% source() # Figure C1
-here("Scripts/Tables/XX_TableC3_WellbeingLVs.R") %>% source() ## Moved from MS to Supplement
+# here("Scripts/Setup/XX_QualAnalysis.R") %>% source()
+# here("Scripts/Figures/XX_WTP_BarChart_V1.R") %>% source()
+
 
 #### End of script
-# *************************************************************************
+# **********************************************************************************
